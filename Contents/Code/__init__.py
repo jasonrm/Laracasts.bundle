@@ -1,4 +1,6 @@
 import re
+import urllib, urllib2
+import cookielib
 
 NAME = 'Laracasts'
 BASE = 'https://laracasts.com'
@@ -11,16 +13,21 @@ PREFIX = '/video/laracasts'
 ICON = 'icon-default.png'
 ART = 'art-default.png'
 
-HEADERS = {
-    'Cookie': False
-}
+class NoRedirection(urllib2.HTTPErrorProcessor):
+
+    def http_response(self, request, response):
+        return response
+
+    https_response = http_response
+
+cj = cookielib.CookieJar()
+opener = urllib2.build_opener(urllib2.HTTPCookieProcessor(cj))
+no_redirect_opener = urllib2.build_opener(NoRedirection, urllib2.HTTPCookieProcessor(cj))
 
 ####################################################################################################
 def Start():
     ObjectContainer.title1 = NAME
     ObjectContainer.art = R(ART)
-
-    HTTP.CacheTime = CACHE_1HOUR
 
 ####################################################################################################
 @handler(PREFIX, NAME, ICON, ART)
@@ -32,19 +39,17 @@ def MainMenu():
     # oc.add(DirectoryObject(key = Callback(AllCategories), title = 'All Categories'))
     oc.add(PrefsObject(title = L('Preferences...')))
 
+    Login()
+
     return oc
 
 ####################################################################################################
 @route('/video/laracasts/series')
 def BySeries():
-
-    if not Prefs['email'] or not Prefs['password']:
-        return ObjectContainer(header=L('Logging in'), message=L('Please enter your email and password in the preferences.'))
-
-    Login()
-
     oc = ObjectContainer(title2="Browse By Series")
-    page = HTML.ElementFromURL(SERIES % "", cacheTime=HTTP.CacheTime)
+
+    response = opener.open(SERIES % "")
+    page = HTML.ElementFromString(response.read())
     series_elements = page.xpath('//div[@class="Card"]')
 
     for series_element in series_elements:
@@ -66,15 +71,10 @@ def BySeries():
 ####################################################################################################
 @route('/video/laracasts/series/{series_slug}')
 def Series(series_slug, series_title, series_thumb):
-
-    if not Prefs['email'] or not Prefs['password']:
-        return ObjectContainer(header=L('Logging in'), message=L('Please enter your email and password in the preferences.'))
-
-    Login()
-
     oc = ObjectContainer(title2=series_title)
 
-    series_page = HTML.ElementFromURL(SERIES % series_slug)
+    response = opener.open(SERIES % series_slug)
+    series_page = HTML.ElementFromString(response.read())
 
     results = {}
 
@@ -91,7 +91,8 @@ def Series(series_slug, series_title, series_thumb):
                 Log.Info(url)
 
                 try:
-                    video_page = HTML.ElementFromURL(BASE + url, headers=HEADERS, cacheTime=HTTP.CacheTime)
+                    response = opener.open(BASE + url)
+                    video_page = HTML.ElementFromString(response.read())
 
                     video_url = video_page.xpath('//source[@data-quality="HD"]/@src')[0].strip()
                     video_title = video_page.xpath('//h1[@class="Video__title"]/text()')[0]
@@ -159,16 +160,43 @@ def CreateVideoClipObject(title, summary, duration, thumb, temp_url, include_con
 
 ####################################################################################################
 def Login():
-    if HEADERS['Cookie'] == False:
-        page = HTML.ElementFromURL(BASE + '/login')
-        token = page.xpath('//input[@name="_token"]/@value')[0]
-        Log.Info('token: {}'.format(token))
+    if not Prefs['email'] or not Prefs['password']:
+        return
 
+    try:
+        response = no_redirect_opener.open(BASE + '/login')
+        if response.code == 302:
+            Log.Info("Already Authenticated")
+            return
+        Log.Info("Auth required")
+    except urllib2.HTTPError, e:
+        if e.code == 401 or e.code == 403:
+            raise Ex.MediaNotAuthorized
+        return
+    except:
+        return
+
+    html = response.read()
+    page = HTML.ElementFromString(html)
+    token = page.xpath('//input[@name="_token"]/@value')[0]
+    if not token:
+        raise Ex.MediaNotAuthorized
+
+    try:
         post = {
             'email': Prefs['email'],
             'password': Prefs['password'],
             '_token': token
         }
+        response = no_redirect_opener.open(BASE + '/sessions', data=urllib.urlencode(post))
 
-        login = HTTP.Request(BASE + '/sessions', post)
-        HEADERS['Cookie'] = HTTP.CookiesForURL(BASE + '/sessions')
+        if 'Set-Cookie' in response.info():
+            Log.Info("Auth Success")
+            return
+        Log.Info("Auth Failure")
+    except urllib2.HTTPError, e:
+        if e.code == 401 or e.code == 403:
+            raise Ex.MediaNotAuthorized
+        return
+    except:
+        return
