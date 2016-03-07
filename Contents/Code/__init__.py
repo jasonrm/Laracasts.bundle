@@ -39,7 +39,10 @@ def MainMenu():
     # oc.add(DirectoryObject(key = Callback(AllCategories), title = 'All Categories'))
     oc.add(PrefsObject(title = L('Preferences...')))
 
-    Login()
+    try:
+        Login()
+    except Ex.MediaNotAuthorized:
+        return MessageContainer(header=unicode('Auth Error'), message=unicode("Invalid username and/or password."))
 
     return oc
 
@@ -168,7 +171,7 @@ def Login():
         if response.code == 302:
             Log.Info("Already Authenticated")
             return
-        Log.Info("Auth required")
+        Log.Info("Authentication required")
     except urllib2.HTTPError, e:
         if e.code == 401 or e.code == 403:
             raise Ex.MediaNotAuthorized
@@ -190,14 +193,12 @@ def Login():
         }
         response = no_redirect_opener.open(BASE + '/sessions', data=urllib.urlencode(post))
 
-        if 'Set-Cookie' in response.info():
-            Log.Info("Auth Success")
+        if response.info()['Location'] == BASE + '/dashboard':
+            Log.Info("Authentication Success")
             return
         raise Ex.MediaNotAuthorized
-        Log.Info("Auth Failure")
+        Log.Info("Authentication Failure")
     except urllib2.HTTPError, e:
         if e.code == 401 or e.code == 403:
             raise Ex.MediaNotAuthorized
-        return
-    except:
         return
