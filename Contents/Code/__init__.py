@@ -193,6 +193,7 @@ def Login():
         if 'Set-Cookie' in response.info():
             Log.Info("Auth Success")
             return
+        raise Ex.MediaNotAuthorized
         Log.Info("Auth Failure")
     except urllib2.HTTPError, e:
         if e.code == 401 or e.code == 403:
