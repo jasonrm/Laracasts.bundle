@@ -1,6 +1,7 @@
 import re
 import urllib, urllib2
 import cookielib
+import time
 
 NAME = 'Laracasts'
 BASE = 'https://laracasts.com'
@@ -23,6 +24,35 @@ class NoRedirection(urllib2.HTTPErrorProcessor):
 cj = cookielib.CookieJar()
 opener = urllib2.build_opener(urllib2.HTTPCookieProcessor(cj))
 no_redirect_opener = urllib2.build_opener(NoRedirection, urllib2.HTTPCookieProcessor(cj))
+
+# Source: http://jonebird.com/2012/02/07/python-memoize-decorator-with-ttl-argument/
+class memoized_ttl(object):
+    """Decorator that caches a function's return value each time it is called within a TTL
+    If called within the TTL and the same arguments, the cached value is returned,
+    If called outside the TTL or a different value, a fresh value is returned.
+    """
+    def __init__(self, ttl):
+        self.cache = {}
+        self.ttl = ttl
+    def __call__(self, f):
+        def wrapped_f(*args):
+            now = time.time()
+            try:
+                value, last_update = self.cache[args]
+                if self.ttl > 0 and now - last_update > self.ttl:
+                    raise AttributeError
+                #print 'DEBUG: cached value'
+                return value
+            except (KeyError, AttributeError):
+                value = f(*args)
+                self.cache[args] = (value, now)
+                #print 'DEBUG: fresh value'
+                return value
+            except TypeError:
+                # uncachable -- for instance, passing a list as an argument.
+                # Better to not cache than to blow up entirely.
+                return f(*args)
+        return wrapped_f
 
 ####################################################################################################
 def Start():
@@ -50,9 +80,8 @@ def MainMenu():
 @route('/video/laracasts/series')
 def BySeries():
     oc = ObjectContainer(title2="Browse By Series")
-
-    response = opener.open(SERIES % "")
-    page = HTML.ElementFromString(response.read())
+    html = cacheable_open(SERIES % "")
+    page = HTML.ElementFromString(html)
     series_elements = page.xpath('//div[@class="Card"]')
 
     for series_element in series_elements:
@@ -76,8 +105,8 @@ def BySeries():
 def Series(series_slug, series_title, series_thumb):
     oc = ObjectContainer(title2=series_title)
 
-    response = opener.open(SERIES % series_slug)
-    series_page = HTML.ElementFromString(response.read())
+    html = cacheable_open(SERIES % series_slug)
+    series_page = HTML.ElementFromString(html)
 
     results = {}
 
@@ -94,8 +123,8 @@ def Series(series_slug, series_title, series_thumb):
                 Log.Info(url)
 
                 try:
-                    response = opener.open(BASE + url)
-                    video_page = HTML.ElementFromString(response.read())
+                    html = cacheable_open(BASE + url)
+                    video_page = HTML.ElementFromString(html)
 
                     video_url = video_page.xpath('//source[@data-quality="HD"]/@src')[0].strip()
                     video_title = video_page.xpath('//h1[@class="Video__title"]/text()')[0]
@@ -160,6 +189,11 @@ def CreateVideoClipObject(title, summary, duration, thumb, temp_url, include_con
         return ObjectContainer(objects=[videoclip_obj])
     else:
         return videoclip_obj
+
+@memoized_ttl(900)
+def cacheable_open(url):
+    html = opener.open(url).read()
+    return html
 
 ####################################################################################################
 def Login():
