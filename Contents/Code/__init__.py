@@ -20,7 +20,7 @@ def Start():
     ObjectContainer.title1 = NAME
     ObjectContainer.art = R(ART)
 
-    HTTP.CacheTime = CACHE_1MINUTE
+    HTTP.CacheTime = CACHE_1HOUR
 
 ####################################################################################################
 @handler(PREFIX, NAME, ICON, ART)
