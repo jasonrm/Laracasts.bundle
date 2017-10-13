@@ -88,7 +88,7 @@ def MainMenu():
 
 ####################################################################################################
 @route('/video/laracasts/series')
-def BySeries():
+def BySeries(**kwargs):
     oc = ObjectContainer(title2="Browse By Series")
     html = cacheable_open(SERIES % "")
     page = HTML.ElementFromString(html)
@@ -114,7 +114,7 @@ def BySeries():
 
 ####################################################################################################
 @route('/video/laracasts/series/{series_slug}')
-def Series(series_slug, series_title, series_thumb):
+def Series(series_slug, series_title, series_thumb, **kwargs):
     oc = ObjectContainer(title2=series_title)
 
     html = cacheable_open(SERIES % series_slug)
@@ -173,7 +173,7 @@ def Series(series_slug, series_title, series_thumb):
     return oc
 
 @route('/video/laracasts/play')
-def CreateVideoClipObject(title, summary, duration, temp_url, thumb=None, include_container=False):
+def CreateVideoClipObject(title, summary, duration, temp_url, thumb=None, include_container=False, **kwargs):
     items = []
 
     items.append(
@@ -203,7 +203,7 @@ def CreateVideoClipObject(title, summary, duration, temp_url, thumb=None, includ
     else:
         return videoclip_obj
 
-@memoized_ttl(900)
+# @memoized_ttl(900)
 def cacheable_open(url):
     html = opener.open(url).read()
     return html
