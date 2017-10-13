@@ -183,7 +183,7 @@ def CreateVideoClipObject(title, summary, duration, temp_url, thumb=None, includ
             audio_codec = AudioCodec.AAC,
             video_codec = VideoCodec.H264,
             audio_channels = 2,
-            optimized_for_streaming = True
+            optimized_for_streaming = False
         )
     )
     items.reverse()
