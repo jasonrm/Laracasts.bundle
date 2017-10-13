@@ -1,6 +1,8 @@
 import re
 import urllib, urllib2
 import cookielib
+import os
+import ssl
 import time
 
 NAME = 'Laracasts'
@@ -22,8 +24,16 @@ class NoRedirection(urllib2.HTTPErrorProcessor):
     https_response = http_response
 
 cj = cookielib.CookieJar()
-opener = urllib2.build_opener(urllib2.HTTPCookieProcessor(cj))
-no_redirect_opener = urllib2.build_opener(NoRedirection, urllib2.HTTPCookieProcessor(cj))
+cacerts = Core.storage.join_path(Core.app_support_path, Core.config.bundles_dir_name, 'Laracasts.bundle', "Contents", "Resources", "cacert.pem")
+Log.Info(cacerts);
+cxt = ssl.create_default_context(cafile=cacerts)
+opener = urllib2.build_opener(urllib2.HTTPCookieProcessor(cj), urllib2.HTTPSHandler(context=cxt))
+no_redirect_opener = urllib2.build_opener(NoRedirection, urllib2.HTTPCookieProcessor(cj), urllib2.HTTPSHandler(context=cxt))
+common_headers = [
+    ('User-agent', 'Laracasts Plex Plugin/1.0 (+https://github.com/jasonrm/Laracasts.bundle)')
+]
+opener.addheaders = common_headers
+no_redirect_opener.addheaders = common_headers
 
 # Source: http://jonebird.com/2012/02/07/python-memoize-decorator-with-ttl-argument/
 class memoized_ttl(object):
@@ -82,17 +92,19 @@ def BySeries():
     oc = ObjectContainer(title2="Browse By Series")
     html = cacheable_open(SERIES % "")
     page = HTML.ElementFromString(html)
-    series_elements = page.xpath('//div[@class="Card"]')
+    series_elements = page.xpath('//div[contains(concat(" ", normalize-space(@class), " "), " series-card ")]')
 
     for series_element in series_elements:
-        series_title = series_element.xpath('.//*[contains(@class, "Card__title")]/*/text()')[0].strip()
-        series_slug = series_element.xpath('.//a/@href')[0].replace('/series/', '')
-        series_thumb = series_element.xpath('.//img[contains(@class, "Card__image")]/@src')[0]
-
+        series_title = series_element.xpath('.//*[contains(@class, "series-card-title")]/text()')[0].strip()
         series_title = re.sub( '\s+', ' ', series_title ).strip()
+        Log.Info('series_title: %s' % series_title)
 
-        if series_thumb[0:2] == '//':
-            series_thumb = 'https:' + series_thumb
+        series_slug = series_element.xpath('.//a/@href')[0].replace('/series/', '')
+        Log.Info('series_slug: %s' % series_slug)
+
+        series_thumb = series_element.xpath('.//*[contains(@class, "series-card-thumbnail")]/img/@src')[0]
+        series_thumb = BASE + series_thumb
+        Log.Info('series_thumb: %s' % series_thumb)
 
         series_key = Callback(Series, series_slug=series_slug, series_title=series_title, series_thumb=series_thumb)
         series_object = DirectoryObject(key=series_key, title=series_title, thumb=Resource.ContentsOfURLWithFallback(series_thumb))
@@ -112,41 +124,42 @@ def Series(series_slug, series_title, series_thumb):
 
     @parallelize
     def GetAllVideos():
-        videos = series_page.xpath('//span[@class="Lesson-List__title"]/a')
+        videos = series_page.xpath('//*[contains(concat(" ", normalize-space(@class), " "), " episode-list-item ")]')
 
         for num in range(len(videos)):
             video = videos[num]
 
             @task
             def GetVideo(num=num, video=video, results=results):
-                url = video.xpath('@href')[0]
-                Log.Info(url)
+                url = BASE + video.xpath('.//a/@href')[0]
+                Log.Info('video url: %s', url)
 
                 try:
-                    html = cacheable_open(BASE + url)
+                    html = cacheable_open(url)
                     video_page = HTML.ElementFromString(html)
 
                     video_url = video_page.xpath('//source[@data-quality="HD"]/@src')[0].strip()
-                    video_title = video_page.xpath('//h1[@class="Video__title"]/text()')[0]
-                    video_summary = "\n".join(video_page.xpath('//div[@class="Video__body"]/text()|//div[@class="Video__body"]/p/text()'))
-                    video_duration = Datetime.MillisecondsFromString(video_page.xpath('//li[contains(@class, "Lesson-List__item--is-current")]/span[contains(@class, "Lesson-List__length")]/text()')[0])
-                    video_thumb = video_page.xpath('//div[contains(@class, "series-outline")]/*/img/@src')[0]
-
-                    video_title = re.sub( '\s+', ' ', video_title ).strip()
-                    video_summary = re.sub( '\s+', ' ', video_summary ).strip()
-
                     if video_url[0:2] == '//':
                         video_url = 'https:' + video_url
+                    Log.Info('video_url: %s' % video_url)
 
-                    if video_thumb[0:2] == '//':
-                        video_thumb = 'https:' + video_thumb
+                    video_title = video_page.xpath('//li[contains(concat(" ", normalize-space(@class), " "), " is-active ")]/*[contains(concat(" ", normalize-space(@class), " "), " episode-title ")]/text()')[0].strip()
+                    video_title = re.sub( '\s+', ' ', video_title ).strip()
+                    video_title = "%d: %s" % (num + 1, video_title)
+                    Log.Info('video_title: %s' % video_title)
+
+                    video_summary = "\n".join(video_page.xpath('//*[contains(concat(" ", normalize-space(@class), " "), " video-description ")]//text()')).strip()
+                    video_summary = re.sub( '\s+', ' ', video_summary ).strip()
+                    Log.Info('video_summary: %s' % video_summary)
+
+                    video_duration = Datetime.MillisecondsFromString(video_page.xpath('//li[contains(concat(" ", normalize-space(@class), " "), " is-active ")]/*[contains(concat(" ", normalize-space(@class), " "), " length ")]/text()')[0])
 
                     results[num] = CreateVideoClipObject(
                         title = video_title,
                         summary = video_summary,
                         duration = video_duration,
-                        thumb = Resource.ContentsOfURLWithFallback(video_thumb),
-                        temp_url = video_url
+                        temp_url = video_url,
+                        thumb = series_thumb
                     )
                 except (IndexError):
                     return
@@ -160,7 +173,7 @@ def Series(series_slug, series_title, series_thumb):
     return oc
 
 @route('/video/laracasts/play')
-def CreateVideoClipObject(title, summary, duration, thumb, temp_url, include_container=False):
+def CreateVideoClipObject(title, summary, duration, temp_url, thumb=None, include_container=False):
     items = []
 
     items.append(
