@@ -203,7 +203,7 @@ def CreateVideoClipObject(title, summary, duration, temp_url, thumb=None, includ
     else:
         return videoclip_obj
 
-# @memoized_ttl(900)
+@memoized_ttl(900)
 def cacheable_open(url):
     html = opener.open(url).read()
     return html
