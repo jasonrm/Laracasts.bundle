@@ -14,7 +14,7 @@ ICONS = {
 NAME = 'Laracasts'
 PREFIX = '/video/laracasts'
 ICON = 'icon-default.png'
-ART = 'art-default.png'
+ART = 'art-default.jpg'
 
 class NoRedirection(urllib2.HTTPErrorProcessor):
 
@@ -68,6 +68,13 @@ class memoized_ttl(object):
 def Start():
     ObjectContainer.title1 = NAME
     ObjectContainer.art = R(ART)
+
+    DirectoryObject.thumb = R(ICON)
+    DirectoryObject.art = R(ART)
+    EpisodeObject.thumb = R(ICON)
+    EpisodeObject.art = R(ART)
+    VideoClipObject.thumb = R(ICON)
+    VideoClipObject.art = R(ART)
 
 ####################################################################################################
 @handler(PREFIX, NAME, ICON, ART)
