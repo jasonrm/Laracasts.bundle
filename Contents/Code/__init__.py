@@ -97,14 +97,14 @@ def BySeries():
     for series_element in series_elements:
         series_title = series_element.xpath('.//*[contains(@class, "series-card-title")]/text()')[0].strip()
         series_title = re.sub( '\s+', ' ', series_title ).strip()
-        Log.Info('series_title: %s' % series_title)
+        # Log.Info('series_title: %s' % series_title)
 
         series_slug = series_element.xpath('.//a/@href')[0].replace('/series/', '')
-        Log.Info('series_slug: %s' % series_slug)
+        # Log.Info('series_slug: %s' % series_slug)
 
         series_thumb = series_element.xpath('.//*[contains(@class, "series-card-thumbnail")]/img/@src')[0]
         series_thumb = BASE + series_thumb
-        Log.Info('series_thumb: %s' % series_thumb)
+        # Log.Info('series_thumb: %s' % series_thumb)
 
         series_key = Callback(Series, series_slug=series_slug, series_title=series_title, series_thumb=series_thumb)
         series_object = DirectoryObject(key=series_key, title=series_title, thumb=Resource.ContentsOfURLWithFallback(series_thumb))
@@ -132,7 +132,7 @@ def Series(series_slug, series_title, series_thumb):
             @task
             def GetVideo(num=num, video=video, results=results):
                 url = BASE + video.xpath('.//a/@href')[0]
-                Log.Info('video url: %s', url)
+                # Log.Info('video url: %s', url)
 
                 try:
                     html = cacheable_open(url)
@@ -141,16 +141,16 @@ def Series(series_slug, series_title, series_thumb):
                     video_url = video_page.xpath('//source[@data-quality="HD"]/@src')[0].strip()
                     if video_url[0:2] == '//':
                         video_url = 'https:' + video_url
-                    Log.Info('video_url: %s' % video_url)
+                    # Log.Info('video_url: %s' % video_url)
 
                     video_title = video_page.xpath('//li[contains(concat(" ", normalize-space(@class), " "), " is-active ")]/*[contains(concat(" ", normalize-space(@class), " "), " episode-title ")]/text()')[0].strip()
                     video_title = re.sub( '\s+', ' ', video_title ).strip()
                     video_title = "%d: %s" % (num + 1, video_title)
-                    Log.Info('video_title: %s' % video_title)
+                    # Log.Info('video_title: %s' % video_title)
 
                     video_summary = "\n".join(video_page.xpath('//*[contains(concat(" ", normalize-space(@class), " "), " video-description ")]//text()')).strip()
                     video_summary = re.sub( '\s+', ' ', video_summary ).strip()
-                    Log.Info('video_summary: %s' % video_summary)
+                    # Log.Info('video_summary: %s' % video_summary)
 
                     video_duration = Datetime.MillisecondsFromString(video_page.xpath('//li[contains(concat(" ", normalize-space(@class), " "), " is-active ")]/*[contains(concat(" ", normalize-space(@class), " "), " length ")]/text()')[0])
 
