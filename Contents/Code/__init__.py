@@ -30,7 +30,7 @@ cxt = ssl.create_default_context(cafile=cacerts)
 opener = urllib2.build_opener(urllib2.HTTPCookieProcessor(cj), urllib2.HTTPSHandler(context=cxt))
 no_redirect_opener = urllib2.build_opener(NoRedirection, urllib2.HTTPCookieProcessor(cj), urllib2.HTTPSHandler(context=cxt))
 common_headers = [
-    ('User-agent', 'Laracasts Plex Plugin/1.0 (+https://github.com/jasonrm/Laracasts.bundle)')
+    ('User-agent', 'Laracasts Plex Plugin/1.0.1 (+https://github.com/jasonrm/Laracasts.bundle)')
 ]
 opener.addheaders = common_headers
 no_redirect_opener.addheaders = common_headers
@@ -145,7 +145,7 @@ def Series(series_slug, series_title, series_thumb, **kwargs):
                     html = cacheable_open(url)
                     video_page = HTML.ElementFromString(html)
 
-                    video_url = video_page.xpath('//source[@data-quality="HD"]/@src')[0].strip()
+                    video_url = BASE + video_page.xpath('//a[contains(concat(" ", normalize-space(@class), " "), " for-download ")]/@href')[0].strip()
                     if video_url[0:2] == '//':
                         video_url = 'https:' + video_url
                     # Log.Info('video_url: %s' % video_url)
@@ -183,6 +183,8 @@ def Series(series_slug, series_title, series_thumb, **kwargs):
 def CreateVideoClipObject(title, summary, duration, temp_url, thumb=None, include_container=False, **kwargs):
     items = []
 
+    real_url = cacheable_location(temp_url)
+
     items.append(
         MediaObject(
             parts = [PartObject(key=temp_url)],
@@ -214,6 +216,14 @@ def CreateVideoClipObject(title, summary, duration, temp_url, thumb=None, includ
 def cacheable_open(url):
     html = opener.open(url).read()
     return html
+
+@memoized_ttl(900)
+def cacheable_location(url):
+    response = no_redirect_opener.open(url)
+    new_url = response.info()['Location']
+    # Log.Info('new_url: %s' % new_url)
+    return new_url
+
 
 ####################################################################################################
 def Login():
